@@ -4,13 +4,15 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qsl, urlparse
 import re
 import redis
+import uuid
 
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses = True)
 
 class WebRequestHandler(BaseHTTPRequestHandler):
 
-
-
+    @cached_property
+    def cookies(self):
+        return SimpleCookie(self.headers.get("Cookie"))
 
     def do_GET(self):
         self.url = urlparse(self.path)
@@ -25,6 +27,23 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             return
         else:
             self.send_error(404, "Not found")
+    
+    def set_cookie(self, sesion):
+        sc = SimpleCookie()
+        sc["session"] = sesion
+        sc["session"]["max_age"] = 10
+        self.send_header('Set-Cookie', sc.output(headers = '')) #considerar otra manera de hacer
+
+
+    def obtiene_cookie(self):
+        cookie = self.cookies
+        if not cookie:
+            cookie = SimpleCookie()
+            cookie["session"] = uuid.uuid4() # Se agrega identificador unico
+        else:
+            print("Ya existe cookie")
+        return cookie.get("session").value # Siempre se retorna el obj.value
+
 
     def get_response(self,bookid):
 #        r = redis.Redis(host='localhost', decode_responses = True)
@@ -39,16 +58,38 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             {'NO EXISTE'}
             """
 
+    def inserta_sesion(self,sesion,book_id):
+        r.rpush(sesion,book_id)
+
+    def get_recomienda(self,sesion,book_id):
+        indice = 1
+        llaves = r.dbsize()
+        print(llaves)
+        total_libros = []
+        while indice <= llaves:
+            if r.exists((indice)) == 1:
+                total_libros.append(indice)
+                indice += 1
+        print(total_libros)
+
+
+
     def get_book(self,book_id):
         book_page = r.get(book_id)
+        sesion = self.obtiene_cookie()
+       # self.inserta_sesion(sesion,book_id)
+        recomienda = self.get_recomienda(sesion,book_id)
         if book_page:    
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
+       #     self.set_cookie(sesion)
             self.end_headers()
             response = f"""
             {book_page}
             <p> Ruta: {self.path} <p>
             <p> URL: {self.url} <p>
+            <p> Sesion: {sesion} <p>
+            <p> Recomendacion: {recomienda} <p>
             """
             self.wfile.write(response.encode("utf-8"))
         else:
