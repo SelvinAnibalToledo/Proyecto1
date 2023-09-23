@@ -28,11 +28,11 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, "Not found")
     
-    def set_cookie(self, sesion):
+    def set_cookie(self, sesion,max_age=10):
         sc = SimpleCookie()
         sc["session"] = sesion
-        sc["session"]["max_age"] = 10
-        self.send_header('Set-Cookie', sc.output(headers = '')) #considerar otra manera de hacer
+        sc["session"]["max-age"] = max_age
+        self.send_header('Set-Cookie', sc.output(header='')) #considerar otra manera de hacer
 
 
     def obtiene_cookie(self):
@@ -59,30 +59,51 @@ class WebRequestHandler(BaseHTTPRequestHandler):
             """
 
     def inserta_sesion(self,sesion,book_id):
+        print("sesion:" + str(sesion))
+        print("libro" + str(book_id))
+       # if r.exists se repiten numeros
         r.rpush(sesion,book_id)
 
     def get_recomienda(self,sesion,book_id):
         indice = 1
         llaves = r.dbsize()
-        print(llaves)
+        #print(llaves)
         total_libros = []
         while indice <= llaves:
             if r.exists((indice)) == 1:
-                total_libros.append(indice)
+                total_libros.append(str(indice))
                 indice += 1
-        print(total_libros)
+            else:
+                break
+        
+        libros_visitados = r.lrange(sesion,0,indice)
+       
+        print("TOTAL DE LIBROS: " + str(total_libros))
+        print("LIBROS VISITADOS: " + str(libros_visitados))
+
+
+        recomendacion = [b for b in total_libros if b not in 
+                [libros for libros in libros_visitados]]
+
+        #print(indice)
+        #print(libros_visitados)
+        if recomendacion:
+            return recomendacion #Mandar un mejor mensaje de libros a leer utilizar: BeatifulShop
+        else: 
+            return "Has leido todos los libros"
+        #print(total_libros)
 
 
 
     def get_book(self,book_id):
         book_page = r.get(book_id)
         sesion = self.obtiene_cookie()
-       # self.inserta_sesion(sesion,book_id)
+        self.inserta_sesion(sesion,book_id)
         recomienda = self.get_recomienda(sesion,book_id)
         if book_page:    
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
-       #     self.set_cookie(sesion)
+            self.set_cookie(sesion)
             self.end_headers()
             response = f"""
             {book_page}
