@@ -2,6 +2,7 @@ from functools import cached_property
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qsl, urlparse
+from bs4 import BeautifulSoup
 import re
 import redis
 import uuid
@@ -14,12 +15,17 @@ class WebRequestHandler(BaseHTTPRequestHandler):
     def cookies(self):
         return SimpleCookie(self.headers.get("Cookie"))
 
+    @cached_property
+    def query_data(self):
+        return dict(parse_qsl(self.url.query))
+
     def do_GET(self):
         self.url = urlparse(self.path)
 #        bookid = re.findall(r'^/Books/(\d+)$',self.url.path)
 #        strbookid = "".join(bookid)
 #        print(strbookid)
         method = self.get_metodo(self.url.path)
+        print("path: " + str(self.url.path))
         if method:
             method_name, dict_params = method 
             method = getattr(self, method_name)
@@ -87,8 +93,19 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 
         #print(indice)
         #print(libros_visitados)
+        mensaje = ''
         if recomendacion:
-            return recomendacion #Mandar un mejor mensaje de libros a leer utilizar: BeatifulShop
+            for i in (recomendacion):
+                if i == '1':
+                    mensaje += ' Los Miserables '
+                elif i == '2':
+                    mensaje += ' El principito '
+                elif i == '3':
+                    mensaje += ' El padrino '
+                elif i == '4':
+                    mensaje += ' Habitos atomicos '
+            return 'le recomendamos leer los siguientes libros: ' + mensaje 
+            #return recomendacion #Mandar un mejor mensaje de libros a leer utilizar: BeatifulShop
         else: 
             return "Has leido todos los libros"
         #print(total_libros)
@@ -125,6 +142,75 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.encode("utf-8"))
 
 
+    def get_html(self):
+        #print('entre ak metoodoooooo')
+        obj1 = 'html.parser'
+        #html_bruto = BeautifulSoup(r.get(1), obj1)
+        #html_solo_texto = html_bruto.get_text()
+        #Se necesita hacer un sadd para agregar la llave de la busqueda y lo que quieres buscar
+        #Despues se necesita dividir todo el texto resultante de los libros en otras saad
+        #para despues hacer un sinter y ver si coinciden
+        indice = 1
+        llaves = r.dbsize()
+        print('estoy en html, antes de iniciar el while')
+        total_libros_found = []
+        while indice <= llaves:
+            if r.exists((indice)) == 1:
+                html_bruto = BeautifulSoup(r.get(indice), obj1)
+                html_solo_texto = html_bruto.get_text()
+                print('cree el beatifulsoup')
+                #r.sadd('libro' + str(indice),html_solo_texto)
+                x = html_solo_texto.split(' ')
+                print(x)
+                self.getprueba(x,indice)
+                #r.sadd('unos',x)
+                #print('despues de agregar')
+                r.sadd('busca','Jean')#aqui agregar los parametros de busqueda
+                busqueda = r.sinter('libro'+str(indice),'busca')
+                #print('buscando el jean')
+                if busqueda:
+                    total_libros_found.append(str(indice))
+                indice += 1
+            else:
+                break
+
+        #print('entre al metodo' + html_bruto.get_text())
+        #return html_solo_texto
+        return total_libros_found
+
+    def getprueba(self,arreglo,indice):
+        #html = BeautifulSoup(r.get(1), 'html.parse')
+        #html1 = html.get_text()
+        #texto = 'Soy Selvin Anibal Toledo'
+        #delim = ' '
+        #x = texto.split(delim)
+        #print(x)
+        #return x
+        for arr in arreglo:
+            r.sadd('libro'+str(indice),arr)
+
+
+
+
+    def get_busqueda(self):
+        print('Estoy en la busqueda')
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        res = self.get_html()
+        #res = self.getprueba()
+        if not res:
+            res = 'NO SE ENCONTRO EN NINGUN LIBRO'
+        response = f"""
+        <p>{self.query_data}<p>
+        <p> el resultado de la busqueda es: <p>
+        <p>Prueba<p>
+        <p>Aqui va la respuesta: {res}<p>
+        """
+       #self.wfile.write() 
+        self.wfile.write(response.encode("utf-8"))
+        #print('Hola, estoy en la busqueda' + str(self.query_data))
+
 
     def get_metodo(self,path):
         for pattern, method in mapping:
@@ -136,6 +222,8 @@ class WebRequestHandler(BaseHTTPRequestHandler):
 mapping = [
            (r'^/Books/(?P<book_id>\d+)$', 'get_book'),
            (r'/$', 'get_inicio'),
+         #  (r'/busqueda?busqueda=(?P<busqueda>\S+)$', 'get_busqueda')
+           (r'/busqueda$', 'get_busqueda')
           ]
 
 
