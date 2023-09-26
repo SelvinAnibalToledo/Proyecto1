@@ -165,7 +165,7 @@ class WebRequestHandler(BaseHTTPRequestHandler):
                 self.getprueba(x,indice)
                 #r.sadd('unos',x)
                 #print('despues de agregar')
-                r.sadd('busca','Jean')#aqui agregar los parametros de busqueda
+                r.sadd('busca',)#aqui agregar los parametros de busqueda
                 busqueda = r.sinter('libro'+str(indice),'busca')
                 #print('buscando el jean')
                 if busqueda:
@@ -178,17 +178,35 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         #return html_solo_texto
         return total_libros_found
 
-    def getprueba(self,arreglo,indice):
+    def getprueba(self):
         #html = BeautifulSoup(r.get(1), 'html.parse')
         #html1 = html.get_text()
         #texto = 'Soy Selvin Anibal Toledo'
         #delim = ' '
         #x = texto.split(delim)
         #print(x)
-        #return x
-        for arr in arreglo:
-            r.sadd('libro'+str(indice),arr)
-
+        mensaje = ''
+        res = None
+        if self.query_data and 'busca' in self.query_data:
+            res = r.sinter(self.query_data['busca'].split(' '))
+            print(res)
+        
+            for i in (res):
+                if i == '1':
+                    mensaje += ' Los Miserables '
+                elif i == '2':
+                    mensaje += ' El principito '
+                elif i == '3':
+                    mensaje += ' El padrino '
+                elif i == '4':
+                    mensaje += ' Habitos atomicos '
+        #return 'le recomendamos leer los siguientes libros: ' + mensaje 
+        
+        if not mensaje:
+            mensaje = 'NO SE ENCONTRO EN NINGUN LIBRO'
+            return mensaje
+        else:
+            return 'Se encontro en: ' + mensaje 
 
 
 
@@ -197,15 +215,14 @@ class WebRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.end_headers()
-        res = self.get_html()
+        #res = self.get_html()
         #res = self.getprueba()
-        if not res:
-            res = 'NO SE ENCONTRO EN NINGUN LIBRO'
+        self.getprueba()
         response = f"""
-        <p>{self.query_data}<p>
+        <h1>BUSQUEDA</h1>
+        <p>USED BUSCO: {self.query_data['busca'].split(' ')}<p>
         <p> el resultado de la busqueda es: <p>
-        <p>Prueba<p>
-        <p>Aqui va la respuesta: {res}<p>
+        <p>{self.getprueba()}<p>
         """
        #self.wfile.write() 
         self.wfile.write(response.encode("utf-8"))
